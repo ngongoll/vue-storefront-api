@@ -1,6 +1,13 @@
 REST API backend for vue-storefront
 ===================================
 
+### Stay connected
+
+[![GitHub Repo stars](https://img.shields.io/github/stars/vuestorefront/vue-storefront?style=social)](https://github.com/vuestorefront/vue-storefront)
+[![Twitter Follow](https://img.shields.io/twitter/follow/vuestorefront?style=social)](https://twitter.com/vuestorefront)
+[![YouTube Channel Subscribers](https://img.shields.io/youtube/channel/subscribers/UCkm1F3Cglty3CE1QwKQUhhg?style=social)](https://www.youtube.com/c/VueStorefront)
+[![Discord](https://img.shields.io/discord/770285988244750366?label=join%20discord&logo=Discord&logoColor=white)](https://discord.vuestorefront.io)
+
 This is a backend service for [vue-storefront](https://github.com/DivanteLtd/vue-storefront). Provides data access to product catalog (via ElasticSearch) and allows users to place orders into order queue (by default it's Redis queue supported via kqueue library).
 
 ## Vue Storefront
@@ -19,7 +26,7 @@ Besides a big improvement for the shopping experience, we also want to create a 
 - Docker and Docker Compose
 
 Already included in `vue-storefront-api` Docker image (required locally, if you do not use containerization):
-- Node.js 8.x or higher
+- Node.js 10.x or higher
 - Yarn
 
 ## Installation
@@ -65,6 +72,54 @@ A [Kibana](https://www.elastic.co/products/kibana) service is available to explo
 
 At first access it will ask to specify an index pattern, insert `vue_storefront*`
 
+**Note:** Kibana is not provided with the Elastic 7 docker file. Please install it on your own when needed or check the [`es-head`](https://chrome.google.com/webstore/detail/elasticsearch-head/ffmkiejjmecolpfloofpjologoblkegm) Chrome plugin.
+
+## Elastic 7 support
+
+By default, Vue Storefront API docker files and config are based on Elastic 5.6. We plan to change the default Elastic version to 7 with the 1.11 stable release. As for now, the [Elastic 7 support](https://github.com/DivanteLtd/vue-storefront-api/pull/342) is marked as **experimental**. 
+
+**How to use it?**
+
+In order to use the new Elastic 7 please make sure your `vue-storefront-api` has been checked out from the [PR#342](https://github.com/DivanteLtd/vue-storefront-api/pull/342) branch.
+To start the Elastic 7 docker service please use the `docker-compose.elastic7.yml` file provided:
+
+```bash
+docker-compose -f docker-compose.elastic7.yml up
+```
+
+Then, please do change the `config/local.json` to start using the new Elastic API. Key properties in the `elasticsearch` section are: `indexTypes` and `apiVersion` (to be set to 7.1). If you're using the multistore configuration please make sure you adjusted the `storeViews.*.elasticsearch` section as well - per each separate store.
+
+```json
+  "elasticsearch": {
+    "host": "localhost",
+    "index": "vue_storefront_catalog",
+    "port": 9200,
+    "protocol": "http",
+    "min_score": 0.01,
+    "indices": [
+      "vue_storefront_catalog",
+      "vue_storefront_catalog_de",
+      "vue_storefront_catalog_it"
+    ],
+    "indexTypes": [
+      "product",
+      "category",
+      "cms_block",
+      "cms_page",
+      "attribute",
+      "taxrule",
+      "review"
+    ],
+    "apiVersion": "7.1"
+  }
+```
+
+Starting from [Elasitc 6 and 7](https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking-changes-7.0.html) we can have **just single** document type per single index. Vue Storefront used to have `product`, `category` ... types defined in the `vue_storefront_catalog`.
+
+From now on, we're using the separate indexes per each entity type. The convention is: `${indexName}_${entityType}`. If your' **logical index name** is `vue_storefront_catalog` then it will be mapped to the **physical indexes** of: `vue_storefront_catalog_product`, `vue_storefront_catalog_category` ...
+
+[Tools](https://docs.vuestorefront.io/guide/data/database-tool.html) are adjusted to ES7. You can use `yarn db new`, `yarn restore`, `yarn mage2vs import`. Just make sure that you have set up `config.elasticsearch.apiVersion` to `7.1`.
+
 ## API access
 Catalog API calls are compliant with ElasticSearch (it works like a filtering proxy to ES). More on ES queries: [ElasticSearch queries tutorial](http://okfnlabs.org/blog/2013/07/01/elasticsearch-query-tutorial.html)
 
@@ -82,7 +137,7 @@ This backend is using ElasticSearch data formats popularized by [ElasticSuite fo
 Please use data migration mechanism provided to manipulate Redis, ElasticSearch or kue. Details: https://github.com/DivanteLtd/vue-storefront-api/tree/master/doc 
 
 ## Adding custom modules with own dependencies (Yarn only)
-When adding custom [Extensions to the API](https://github.com/DivanteLtd/vue-storefront/blob/master/doc/Extending%20vue-storefront-api.md) you might want to define some dependencies inside them. Thanks to [Yarn workspaces](https://yarnpkg.com/lang/en/docs/workspaces/) dependecies defined inside your custom module will be intaled when you execute `yarn` at project root level, so it's way esier and faster than installing all modules dependcies separetly.
+When adding custom [Extensions to the API](https://github.com/DivanteLtd/vue-storefront/blob/master/doc/Extending%20vue-storefront-api.md) you might want to define some dependencies inside them. Thanks to [Yarn workspaces](https://yarnpkg.com/lang/en/docs/workspaces/) dependencies defined inside your custom module will be installed when you execute `yarn` at project root level, so it's way easier and faster than installing all modules dependencies separately.
 
 To do this, define the `package.json` with your dependencies in your custom module:
 - `src/api/extensions/{your-custom-extension}/package.json` 
@@ -94,6 +149,24 @@ NOTE: `npm` users will still have to install the dependencies individually in th
 
 ## Reviews
 To use review feature you need to install custom module for Magento 2: [Divante ReviewApi](https://github.com/DivanteLtd/magento2-review-api)
+By default new reviews will be added with status "Pending". 
+```json
+  "review": {
+    "defaultReviewStatus": 2 
+  },
+```
+
+## Output Cache
+Vue Storefront API supports output cache for catalog operations. Cache is tagged and can by dynamically invalidated. Please find the details how to configure it [in our docs](https://docs.vuestorefront.io/guide/basics/ssr-cache.html).
+
+You can manually clear the Redis cache for specific tags by running the following command:
+
+```bash
+npm run cache clear
+npm run cache clear -- --tag=product,category
+npm run cache clear -- --tag=P198
+npm run cache clear -- --tag=*
+```
 
 ## Running initial Magento2 import
 
@@ -103,13 +176,8 @@ After setting the `config.magento2.api` section using Yours Magento2 oauth crede
 
 ```json
   "magento2": {
-    "url": "http://magento2.demo-1.xyz.com",
     "imgUrl": "http://localhost:8080/media/catalog/product",
     "assetPath": "/../var/magento2-sample-data/pub/media",
-    "magentoUserName": "",
-    "magentoUserPassword": "",
-    "httpUserName": "",
-    "httpUserPassword": "",
     "api": {
       "url": "http://demo-magento2.vuestorefront.io/rest",
       "consumerKey": "byv3730rhoulpopcq64don8ukb8lf2gq",
@@ -131,6 +199,12 @@ You can run the following command to execute the full import:
 ```bash
  yarn mage2vs import --store-code=de
  ```
+
+ Import of CMS blocks and pages is also performed by the full import. If the CMS API extension ((SnowdogApps/magento2-cms-api)[https://github.com/SnowdogApps/magento2-cms-api]) was not installed in magento 2, it's recommended to skip the CMS import commands.
+
+```bash
+ yarn mage2vs import --skip-blocks --skip-pages
+ ```
  
 ## Executing delta indexer
 
@@ -139,6 +213,11 @@ You can use the following command to run a delta indexer for a specific storevie
 ```
 yarn mage2vs productsdelta --store-code=de
 ```
+
+## Self signed certificates
+
+Often in non production environment other services are using self signed certificates for secure connection.
+You can easily setup the application to trust them by putting them in config/certs directory.  
 
 License
 -------

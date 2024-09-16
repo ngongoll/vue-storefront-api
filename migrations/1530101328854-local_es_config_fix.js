@@ -7,7 +7,7 @@ const path = require('path')
 
 const configDir = path.resolve('./config')
 
-var files = fs.readdirSync(configDir).filter(function(file) {
+var files = fs.readdirSync(configDir).filter((file) => {
   if (file === 'default.json') return false
 
   if (file.startsWith('elastic.schema.')) return false
@@ -16,29 +16,29 @@ var files = fs.readdirSync(configDir).filter(function(file) {
 })
 
 module.exports.up = next => {
-  files.forEach(function(file) {
-    var file = path.join(configDir, file)
+  files.forEach((file) => {
+    var filePath = path.join(configDir, file)
 
     try {
-      console.log(`Searching for deprecated parameters in file '${file}'...`)
-      let config = JSON.parse(fs.readFileSync(file))
+      console.log(`Searching for deprecated parameters in file '${filePath}'...`)
+      let config = JSON.parse(fs.readFileSync(filePath))
 
-      if ("esHost" in config) {
-        console.log("Parameter 'esHost' found - rewriting...", file)
+      if ('esHost' in config) {
+        console.log("Parameter 'esHost' found - rewriting...", filePath)
         let esHostPort = config.esHost.split(':')
         _set(config, 'elasticsearch.host', esHostPort[0])
         _set(config, 'elasticsearch.port', esHostPort[1])
         delete config.esHost
       }
 
-      if ("esIndexes" in config) {
+      if ('esIndexes' in config) {
         console.log("Parameter 'esIndexes' found - rewriting...")
         _set(config, 'elasticsearch.indices', config.esIndexes)
         delete config.esIndexes
       }
 
-      fs.writeFileSync(file, JSON.stringify(config, null, 2))
-      console.log(`File '${file}' updated.`)
+      fs.writeFileSync(filePath, JSON.stringify(config, null, 2))
+      console.log(`File '${filePath}' updated.`)
     } catch (e) {
       throw e
     }
